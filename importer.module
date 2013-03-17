@@ -1,0 +1,21 @@
+<?php
+
+/**
+ * Implement hook_menu()
+ */
+function importer_menu() {
+	$items = array();
+	$items['admin/importer'] = array(
+		'title' => 'Artwork CSV importer',
+		'type' => MENU_NORMAL_ITEM,
+
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('importer'),
+
+        'file' => 'importer.form.main.inc',
+
+		'access arguments' => array('create artwork content'),
+	);
+
+	return $items;
+}

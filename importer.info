@@ -1,0 +1,8 @@
+name = Importer
+description = Import artwork nodes through CSV files.
+package = Nail on Wall
+core = 7.x
+
+files[] = importer.module
+
+dependencies[] = entity
