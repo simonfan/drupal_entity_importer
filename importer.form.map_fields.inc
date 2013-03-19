@@ -88,6 +88,12 @@ function importer_map_fields($form, &$form_state) {
       '#default_value' => !empty($form_state['values'][$column_name]) ? $form_state['values'][$column_name] : $suggested_field,
     );
 
+    $form['csv_map'][$column_name]['default_value'] = array(
+      '#type' => 'textfield',
+      '#title' => 'Field default value.',
+      '#description' => 'If the CSV column is empty, what should be it\'s value?',
+    );
+
     $form['csv_map'][$column_name]['is_multiple'] = array(
       '#type' => 'checkbox',
       '#title' => t($column_name . ' is a multi-value field.'),

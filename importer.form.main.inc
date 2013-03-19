@@ -278,6 +278,9 @@ function importer_submit($form, &$form_state) {
     // Now show all the values.
     drupal_set_message(t('Step @num collected the following values: <pre>@result</pre>', array('@num' => $index, '@result' => print_r($value['stored_values'], TRUE))));
   }
+
+
+  drupal_goto('admin/importer/end');
 }
 
 

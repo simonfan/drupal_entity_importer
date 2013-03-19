@@ -15,7 +15,10 @@ function importer_loop_csv($form, &$form_state) {
 	//// VARS /////////
 	///////////////////
 
+	// file info was set on the first form step.
 	$file_info = $step_data[1]['stored_values'];
+
+	// identifier field name was set on the second step
 	$identifier_field_name = $step_data[2]['stored_values']['identifier_field_name'];
 	$csv_col_names = $step_data[2]['stored_values']['csv_col_names'];
 	$csv_map = $step_data[2]['stored_values']['csv_map'];
@@ -25,8 +28,8 @@ function importer_loop_csv($form, &$form_state) {
 	$delimiter = $file_info['csv_delimiter'];
 	$enclosure = $file_info['csv_enclosure'];
 
-	$file_obj = file_load($file_info['file']);
-	$file_resource = fopen($file_obj->uri, 'r');
+	$file_drupal_obj = file_load($file_info['file']);
+	$file_resource = fopen($file_drupal_obj->uri, 'r');
 
 	// variables to hold the newly created resources
 	// and also the updated ones
@@ -96,8 +99,6 @@ function importer_loop_csv($form, &$form_state) {
 			// just update
 			$action = 'update';
 
-
-
 		} else {
 			// create
 			$action = 'create';
@@ -118,9 +119,9 @@ function importer_loop_csv($form, &$form_state) {
 		//////////////////////////////////////////
 		///// SECOND STEP: BUILD THE WRAPPER /////
 		//////////////////////////////////////////
+
+		// ImporterEntityMetadataWrapper is defined below
 		$importer_wrapper = new ImporterEntityMetadataWrapper($file_info['entity_type'], $entity );
-
-
 
 
 
@@ -129,10 +130,12 @@ function importer_loop_csv($form, &$form_state) {
 		////// THIRD STEP: SET THE VALUES ON THE WRAPPER ////
 		/////////////////////////////////////////////////////
 
-
-// echo '<pre>';
 		// loop through the row columns
 		foreach ($row_columns as $col_no => $col_value) {
+
+			// vars 
+			// $csv_col_names,
+			// were all defined in the begining, at VARS
 
 			// get the col_name
 			$csv_col_name = $csv_col_names[ $col_no ];
@@ -140,14 +143,14 @@ function importer_loop_csv($form, &$form_state) {
 			// get the map info object
 			$csv_column_info = $csv_map[ $csv_col_name ];
 
-/*
+			// if the column is the identifier column, do not set it.
+			if ($csv_column_info['maps_to'] == $identifier_field_name) {
+				continue;
+			}
 
-			echo '<br><br><br>';
-			echo 'col value before: ';
-			var_dump($col_value);
+			// the column's default value
+			$col_default_value = $csv_column_info['default_value'];
 
-			var_dump($csv_column_info);
-*/
 			// only set on the importer_wrapper if
 			// the csv_column was mapped to any field
 			
@@ -156,46 +159,32 @@ function importer_loop_csv($form, &$form_state) {
 				// check if the column_value is a multiple value.
 				if ($csv_column_info['is_multiple']) {
 
-$finfo = field_info_field( $csv_column_info['maps_to'] );
-
-if ($finfo['type'] == 'image' ) {
-	echo $csv_column_info['is_multiple'];
-	die();
-}
-
 					$delimiter = $csv_column_info['subfield_delimiter'];
 
 					$col_value = explode($delimiter, $col_value);
-
 					$col_value = array_map('trim', $col_value);
+
+					// also break the default value
+					$col_default_value = explode($delimiter, $col_default_value);
+					$col_default_value = array_map('trim', $col_default_value);
 				}
 
-				// if the field_type is 'file' or 'image',
-				// transform the $val in a path
-				$finfo = field_info_field( $csv_column_info['maps_to'] );
-
-				if ($finfo['type'] == 'image' || $finfo['type'] == 'file') {
-					if ( isset($col_value) && $col_value != '') {
-
-						if ( is_array($col_value) ) {
-							__dump($col_value);
-						}
-
-						// only build the path if the file is not null
-						$col_value = $file_info['temp_file_base_path'] . '/' . $col_value;
-					}
-				}
+				$set_data = array(
+					'field_name' => $csv_column_info['maps_to'],
+					'value' => $col_value,
+					'default_value' => $col_default_value,
+					'temp_file_base_path' => $file_info['temp_file_base_path']
+				);
 
 				// ImporterEntityMetadataWrapper
 				// public function set($field_name, $value, $force = TRUE) {
 				$importer_wrapper->set(
-					$csv_column_info['maps_to'],		// field_name
-					$col_value,							// the value to set the field to
+					$set_data,
 					TRUE 								// force or not force the data into.
 				);
 
 			} else {
-//				drupal_set_message(t( 'The csv column '. $csv_col_name .' was not mapped to any field.' ));
+				// drupal_set_message(t( 'The csv column '. $csv_col_name .' was not mapped to any field.' ));
 			}
 		} // close row loop
 
@@ -281,11 +270,6 @@ if ($finfo['type'] == 'image' ) {
 
 
 	} else {
-
-
-drupal_set_message(t('<pre>@e</pre>', array('@e' => print_r($step_data, TRUE))));
-
-
 		// if no confirmation has been set, build the table and the form.
 
 		$to_create_table = array(
@@ -348,26 +332,6 @@ drupal_set_message(t('<pre>@e</pre>', array('@e' => print_r($step_data, TRUE))))
 
 		return $form;
 	}
-
-//	return array('to_create' => $to_create, 'to_update' => $to_update);
-/*
-echo 'to create';
-	echo '<pre>';
-
-	var_dump($to_create);
-
-	echo '</pre>';
-
-echo 'to update';
-
-echo '<pre>';
-
-var_dump($to_update);
-
-echo '</pre>';
-die();
-
-*/
 }
 
 
@@ -399,141 +363,169 @@ class ImporterEntityMetadataWrapper  {
 
 
 	// set method
-	public function set($field_name, $value, $force = TRUE) {
-		// $prop: the name of the property tobe set on the wrapper
-		// $value: the value to be set to. might be array or string
-		// $force: is used in case the $value format does not fit the $prop format requirements
-		//			in that case, if $force is set to true, the value will be modified to fit in
+	public function set($data, $force = TRUE) {
+		// $data: array(
+		//	'value', 
+		//	'default_value', 
+		//	'field_name', 
+		//	'temp_file_base_path'
+		// )
 
-		// check the value data type
-		$value_is_single = !is_array($value);
+		// VARS
 
-		// check the field data type
-		$field_format = $this::field_data_format($field_name);
-		$field_is_single = $field_format['is_single'];
+		// make sure that the $value is always an array of values
+		$value_arr = ( is_array($data['value']) ) ? $data['value'] : array($data['value']);
+
+		// the field name
+		$field_name = $data['field_name'];
+		$field_info = field_info_field($field_name);
+		// if there is no field info, that means that the field_name 
+		// refers to a entity REAL property and not a entity field property
+		// If this is the case, mock a field_info object
+		if ( !isset($field_info) || $field_info == NULL ) {
+			$field_info = array(
+				'type' => 'title_string',
+				'cardinality' => 1,
+			);
+		}
+
+		// the base path for the file.. this was set on the form's first step.
+		$temp_file_base_path = $data['temp_file_base_path'];
+
+		// VARS
+
 
 		///////////////////////
 		// format the values //
 		///////////////////////
-		if ($value_is_single) {
-			$value = $this->format_to_field_type($value, $field_format['type']);
+		foreach ($value_arr as $key => $val) {
 
-			drupal_set_message('The value type is '. gettype($value) . ' and the required type is '. $field_format['type']);
+			$value_arr[$key] = call_user_func_array(
+				array($this, 'format_value_to_field_type'),	// the method to call
+				array($val, $field_info, $temp_file_base_path)
+			);
+		}
 
-			// if the $value gets to be FALSE, return
-			if (!$value) {
-				return;
-			}
+		// remove falsey value_arr from $value_arr
+		$value_arr = array_filter($value_arr);
+		///////////////////////
+		// format the values //
+		///////////////////////
 
+		$field_is_single = ($field_info['cardinality'] == 1);
 
-		} else {
+		// if the $value_arr is empty, 
+		// instead of only interrupting the process, 
+		// try to fill in the provided default value by calling this same method 
+		// with a new data array.
+		if ( count($value_arr) == 0 ) {
 
-			foreach ($value as $key => $val) {
-				$value[$key] = call_user_func_array(
-					array($this, 'format_to_field_type'),	// the method to call
-					array($val, $field_format['type'])
+			if ( isset($data['default_value']) && $data['default_value'] != '' ) {
+				$d = array(
+					'value' => $data['default_value'],
+					'default_value' => FALSE,
+					'field_name' => $data['field_name'],
+					'temp_file_base_path' => $data['temp_file_base_path']
 				);
+
+				return $this->set($d);
+			} else {
+				return FALSE;
 			}
-
-			// filter the array from falsey values
-			array_filter($value);
 		}
-		///////////////////////
-		// format the values //
-		///////////////////////
 
-
-
-		// fill them in.
-
-		if ($field_is_single && $value_is_single) {
-			// just fill in
-			$this->wrapper->{$field_name}->set($value);
-
-		} elseif ($field_is_single && !$value_is_single) {
-			// throw alert message
-			drupal_set_message(t('The column value '. $value .' is a multi-value (according to your settings, but the field '. $field_name .' is not. Anyway, the first value from the $value was used instead.'), 'error');
-
+		// fill stuff in.
+		if ($field_is_single) {
+			// remove the array wrapper
 			// get the first value inside the array.
-			$value = array_shift($value);
+			$value = array_shift($value_arr);
 
 			$this->wrapper->{$field_name}->set($value);
-
-		} elseif (!$field_is_single && $value_is_single) {
-			// put the value inside an array and set it to the field.
-			$value = array($value);
-
-			$this->wrapper->{$field_name}->set($value);
-
-		} elseif (!$field_is_single && !$value_is_single) {
-			// just fill in
-			$this->wrapper->{$field_name}->set($value);
-		}
-
-	}
-	
-	// method that determines if a given field receives signle or multiple values
-	public function field_data_format($field_name) {
-		$answer = array();
-
-		$finfo = field_info_field($field_name);
-
-		if ( isset($finfo) && count($finfo) > 0 ) {
-
-			$answer['is_field'] = TRUE;
-
-			$answer['field_info'] = $finfo;
-			$answer['is_single'] = ($finfo['cardinality'] == 1);
-			$answer['type'] = $finfo['type'];
 
 		} else {
-			// if there is no field info, that means the requested field 
-			// is actually a property
-			$answer['is_field'] = FALSE;
+			// the value is already an array, just set it
 
-			$answer['field_info'] = NULL;
-			$answer['is_single'] = TRUE;
-
-
-			// AS this is not a field, assume that the correct type is 
-			// string
-			$answer['type'] = 'string';
-
+			$this->wrapper->{$field_name}->set($value_arr);
 		}
 
-		return $answer;
 	}
 
+	// This function receives the CSV file columnd value,
+	// an array containing field_info about the drupal field
+	// and the base path for uploaded files 
 
-	public function format_to_field_type($var, $type) {
-		switch($type) {
+	// and returns a correctly formatted value according to 
+	// the field type (['type'] key in $field_info)
+	public function format_value_to_field_type($value, $field_info, $temp_file_base_path) {
+
+		switch( $field_info['type'] ) {
 			case 'number_integer':
-				return intval($var);
+				$value = intval($value);
 				break;
 
 			case 'number_decimal':
-				return floatval($var);
+				$value = floatval($value);
 				break;
 
 			case 'image':
-				return $this->format_file($var);
+
+				if ( !isset($value) || $value == '' ) {
+
+					$value = FALSE;
+
+				} else {
+
+					$value = $temp_file_base_path . '/' . $value;
+					$value = $this->format_file($value);
+
+				}
 				break;
 
 			case 'file':
-				return $this->format_file($var);
+				if ( !isset($value) || $value != '' ) {
+					$value = FALSE;
+
+				} else {
+
+					$value = $temp_file_base_path . '/' . $value;
+
+					$value = $this->format_file($value);
+
+				}
+				break;
+
+			case 'taxonomy_term_reference':
+				$value = $this->format_taxonomy_term_reference($value, $field_info);
+				break;
+
+			case 'entityreference':
+				$value = $this->format_entity_reference($value, $field_info);
+				break;
+
+			case 'date':
+				$value = $this->format_date($value);
+				break;
+
+			case 'title_string':
+				$value = isset($value) ? strval($value) : '';
 				break;
 
 			// defaults to string
 			default: 
-				return strval($var);
+				$value = strval($value);
 				break;
-		}
+
+		}	// end switch
+
+		return $value;
 	}
 
 	// builds a file array and returns it.
 	// requires the filepath.
 	public function format_file($filepath) {
-		if ($filepath) {
+		$fileexists = file_exists($filepath);
+
+		if ($filepath && $fileexists) {
 			// Create managed File object and associate with Image field.
 			$file = (object) array(
 				'uid' => 1,
@@ -542,14 +534,113 @@ class ImporterEntityMetadataWrapper  {
 				'status' => 1,
 				'display' => 1,
 			);
-
 			// We save the file to the root of the files directory.
 			$file = file_copy($file, 'public://');
 
 			return (array) $file;
 
 		} else {
+			drupal_set_message('File '. $filepath . ' does not exist. It was not uploaded.');
 			return FALSE;
+		}
+	}
+
+	// build date
+	public function format_date($value) {
+		// should return a varchar string with correct formatting.
+	}
+
+	// build the taxonomy term field
+	public function format_taxonomy_term_reference($value, $field_info) {
+		// value may either be the term id or the term value
+
+		if ($value) {
+
+			// first try loading by tid
+			$term_load_by_tid = taxonomy_term_load($value);
+
+			// if any term was successfully loaded by id,
+			// the $tid to be referred to is the $value
+			if ( isset($term_load_by_tid) && $term_load_by_tid ) {
+
+				$ref_id = $value;
+
+			} else {
+
+				// try loading the term by name
+				$term_load_by_name = taxonomy_get_term_by_name($value);
+
+				if ( count($term_load_by_name) > 0 ) {
+					$term_keys = array_keys($term_load_by_name);
+
+					$ref_id = array_shift($term_keys);
+				} else {
+					$ref_id = FALSE;
+				}
+
+			}
+
+
+			if ( isset($ref_id) && $ref_id != '' ) {
+				return intval($ref_id);
+			} else {
+				return FALSE;
+			}
+
+		} else {
+			return FALSE;
+		}
+	}
+
+	public function format_entity_reference($value, $field_info) {
+		// value may either be the entity id or the entity title value
+
+		// first get the referenced entity type.
+		$entity_type = $field_info['settings']['target_type'];
+
+		if ($value) {
+
+			// first try loading by entity id
+			$entity_load_by_id = entity_load($entity_type, array($value));
+
+			// if any entity was successfully loaded by id,
+			// the $target_id is equal to the $value var.
+			if ( count($entity_load_by_id) > 0 ) {
+				$target_id = $value;
+			} else {
+
+				// try finding the entity by title
+				$query = new EntityFieldQuery();
+
+				$query->entityCondition('entity_type', $entity_type)
+					->propertyCondition('title', $value);
+
+				$results = $query->execute();
+				// the pseudo-entity objects are within an array keyed by the entity type.
+				$results = isset( $results[$entity_type] ) ? $results[$entity_type] : NULL ;
+
+				if ( isset($results) && count($results) > 0) {
+					// as we only expect one entity to be found with this value,
+					// just get the first entity.
+					$result_keys = array_keys($results);
+					$first_result_id = array_shift($result_keys);
+
+					$target_id = $first_result_id;
+				} else {
+					$target_id = FALSE;
+				}
+
+			}
+
+			// if there is a $target_id, make sure it is an int.
+			if (isset($target_id) && $target_id != '') {
+				return intval($target_id);
+			} else {
+				return FALSE;
+			}
+
+		} else {
+			return FALSE;	
 		}
 	}
 }

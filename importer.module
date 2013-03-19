@@ -17,5 +17,17 @@ function importer_menu() {
 		'access arguments' => array('create artwork content'),
 	);
 
+	$items['admin/importer/end'] = array(
+		'title' => 'Importer results',
+		'page callback' => 'importer_results_page',
+
+		'access arguments' => array('create artwork content'),
+	);
+
 	return $items;
+}
+
+
+function importer_results_page() {
+	return 'C\'est fini :D';
 }
