@@ -90,6 +90,8 @@ function importer_file_and_type($form, &$form_state) {
   // ENTITY INFO
   $entity_types = array_keys($entity_info);
 
+  $entity_types = array_combine($entity_types, $entity_types);
+
   // ENTITY SUB-TYPES
 
 /// EXPAND THIS LATER ///
@@ -101,7 +103,8 @@ function importer_file_and_type($form, &$form_state) {
   ////////////////////////////////////
   $form['entity_type'] = array(
     '#title' => 'Entity type to be imported.',
-    '#type' => 'hidden',
+    '#type' => 'select',
+    '#options' => $entity_types,
     '#default_value' => 'node',
   );
 
